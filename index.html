@@ -1,0 +1,369 @@
+
+
+Fitur:
+
+* Love 3D berbentuk hati
+* Bisa diputar menggunakan gerakan tangan
+* Bisa berubah bentuk menjadi tulisan `I LOVE YOU`
+* Menggunakan kamera webcam
+* Efek animasi glowing modern
+
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Love Gesture</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      overflow: hidden;
+      background: radial-gradient(circle at center, #1a0010, #000000);
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #video {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 220px;
+      border-radius: 20px;
+      border: 3px solid hotpink;
+      z-index: 10;
+      transform: scaleX(-1);
+      box-shadow: 0 0 20px hotpink;
+    }
+
+    .info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: white;
+      z-index: 10;
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border-radius: 15px;
+      border: 1px solid hotpink;
+      box-shadow: 0 0 15px hotpink;
+    }
+
+    .info h1 {
+      color: hotpink;
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="info">
+    <h1>3D LOVE</h1>
+    <p>✋ Gerakkan tangan untuk memutar objek</p>
+    <p>🖐 Buka telapak tangan untuk ubah bentuk</p>
+  </div>
+
+  <video id="video" autoplay playsinline></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <script>
+
+    // =========================
+    // THREE JS
+    // =========================
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // LIGHT
+    const light1 = new THREE.PointLight(0xff66cc, 5);
+    light1.position.set(10, 10, 10);
+    scene.add(light1);
+
+    const light2 = new THREE.PointLight(0xffffff, 2);
+    light2.position.set(-10, -10, 10);
+    scene.add(light2);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(ambient);
+
+    // LOVE MATERIAL
+    const material = new THREE.MeshPhysicalMaterial({
+      color: 0xff1493,
+      metalness: 0.2,
+      roughness: 0.1,
+      transmission: 0.2,
+      thickness: 1,
+      clearcoat: 1,
+      emissive: 0xff0077,
+      emissiveIntensity: 0.4
+    });
+
+    // =========================
+    // HEART SHAPE
+    // =========================
+
+    const heartShape = new THREE.Shape();
+
+    heartShape.moveTo(0, 0);
+    heartShape.bezierCurveTo(0, 0, -5, -5, -10, 0);
+    heartShape.bezierCurveTo(-20, 10, -20, 25, -20, 25);
+    heartShape.bezierCurveTo(-20, 40, -5, 55, 0, 65);
+    heartShape.bezierCurveTo(5, 55, 20, 40, 20, 25);
+    heartShape.bezierCurveTo(20, 25, 20, 10, 10, 0);
+    heartShape.bezierCurveTo(5, -5, 0, 0, 0, 0);
+
+    const extrudeSettings = {
+      depth: 8,
+      bevelEnabled: true,
+      bevelSegments: 5,
+      steps: 2,
+      bevelSize: 2,
+      bevelThickness: 2
+    };
+
+    const heartGeometry = new THREE.ExtrudeGeometry(
+      heartShape,
+      extrudeSettings
+    );
+
+    heartGeometry.center();
+
+    const heartMesh = new THREE.Mesh(heartGeometry, material);
+    scene.add(heartMesh);
+
+    // =========================
+    // TEXT I LOVE YOU
+    // =========================
+
+    const groupText = new THREE.Group();
+    scene.add(groupText);
+
+    function createLetter(text, x) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      canvas.width = 512;
+      canvas.height = 256;
+
+      ctx.fillStyle = 'transparent';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = 'bold 120px Arial';
+      ctx.fillStyle = '#ff1493';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, 256, 150);
+
+      const texture = new THREE.CanvasTexture(canvas);
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true
+      });
+
+      const geo = new THREE.PlaneGeometry(20, 10);
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.x = x;
+
+      groupText.add(mesh);
+    }
+
+    createLetter('I', -30);
+    createLetter('LOVE', 0);
+    createLetter('YOU', 30);
+
+    groupText.visible = false;
+
+    camera.position.z = 80;
+
+    // =========================
+    // PARTICLES
+    // =========================
+
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particlesCount = 2000;
+
+    const posArray = new Float32Array(particlesCount * 3);
+
+    for(let i = 0; i < particlesCount * 3; i++) {
+      posArray[i] = (Math.random() - 0.5) * 300;
+    }
+
+    particlesGeometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(posArray, 3)
+    );
+
+    const particlesMaterial = new THREE.PointsMaterial({
+      size: 0.6,
+      color: 0xff66cc
+    });
+
+    const particlesMesh = new THREE.Points(
+      particlesGeometry,
+      particlesMaterial
+    );
+
+    scene.add(particlesMesh);
+
+    // =========================
+    // HAND TRACKING
+    // =========================
+
+    const videoElement = document.getElementById('video');
+
+    let rotateX = 0;
+    let rotateY = 0;
+
+    let isOpenHand = false;
+
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    hands.onResults(onResults);
+
+    const cameraFeed = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 640,
+      height: 480
+    });
+
+    cameraFeed.start();
+
+    function onResults(results) {
+
+      if(results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+
+        const landmarks = results.multiHandLandmarks[0];
+
+        const palm = landmarks[9];
+
+        rotateY = (palm.x - 0.5) * 5;
+        rotateX = (palm.y - 0.5) * 5;
+
+        // cek tangan terbuka
+        const fingerTip = landmarks[8];
+        const fingerBase = landmarks[6];
+
+        if(fingerTip.y < fingerBase.y - 0.1) {
+          isOpenHand = true;
+        } else {
+          isOpenHand = false;
+        }
+
+      }
+    }
+
+    // =========================
+    // ANIMATION
+    // =========================
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      particlesMesh.rotation.y += 0.001;
+
+      if(!isOpenHand) {
+
+        heartMesh.visible = true;
+        groupText.visible = false;
+
+        heartMesh.rotation.y += 0.01 + rotateY * 0.02;
+        heartMesh.rotation.x += rotateX * 0.01;
+
+        heartMesh.position.y = Math.sin(Date.now() * 0.002) * 2;
+
+      } else {
+
+        heartMesh.visible = false;
+        groupText.visible = true;
+
+        groupText.rotation.y += 0.01 + rotateY * 0.02;
+        groupText.rotation.x += rotateX * 0.01;
+
+        groupText.position.y = Math.sin(Date.now() * 0.002) * 2;
+
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // =========================
+    // RESPONSIVE
+    // =========================
+
+    window.addEventListener('resize', () => {
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+    });
+
+  </script>
+
+</body>
+</html>
+```
+
+## Cara Menjalankan
+
+1. Buat folder baru
+2. Simpan file sebagai `index.html`
+3. Buka menggunakan Chrome
+4. Izinkan akses kamera
+5. Gerakkan tangan di depan kamera
+
+## Cara Kerja Gesture
+
+* Tangan bergerak = objek ikut berputar
+* Telapak terbuka = berubah menjadi `I LOVE YOU`
+* Tangan normal = kembali menjadi bentuk hati
+
+## Teknologi yang Digunakan
+
+* Three.js → membuat objek 3D
+* MediaPipe Hands → mendeteksi tangan
+* WebGL → rendering grafis
+* JavaScript → animasi interaktif
+
